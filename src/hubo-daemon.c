@@ -3823,8 +3823,14 @@ void decodeIMUFrame(int num, struct hubo_state *s, struct can_frame *f){
 
 
 
+double debugEnc2Rad(int jnt, int enc, hubo_param_t* h, int line) {
+    double rval = enc2rad(jnt, enc, h);
+    fprintf(stderr, "enc2rad for joint %s returned %f on line %d\n",
+            jointNames[jnt], rval, line);
+    return rval;
+}
 
-
+//#define enc2rad(jnt, enc, h) debugEnc2Rad(jnt, enc, h, __LINE__)
 
 
 int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
@@ -4064,8 +4070,15 @@ int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
         int numMot = h->joint[jnt0].numMot;    // motor number   
         int32_t enc = 0;
         int16_t enc16 = 0;            // encoder value for neck and fingers
-        if( numMot == 1 || numMot == 2 )
-        {
+
+        if (h->joint[jnt0].jmc != jmc) {
+            fprintf(stderr, "sanity check failed: "
+                    "jmc id %d deduced from can id %d, "
+                    "but motor 0 on that jmc claims to be on jmc %d\n", 
+                    jmc, (int)f->can_id, h->joint[jnt0].jmc);
+        } 
+        else if( numMot == 1 || numMot == 2 )
+        {            
             for( i = 0; i < numMot; i++ )
             {
                 enc = 0;
@@ -4073,7 +4086,7 @@ int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
                 enc = (enc << 8) + f->data[2 + i*4];
                 enc = (enc << 8) + f->data[1 + i*4];
                 enc = (enc << 8) + f->data[0 + i*4];
-                int jnt = h->driver[jmc].joints[i];          // motor on the same drive
+                int jnt = h->driver[jmc].joints[i];          // motor on the same drive                        
                 double newPos = enc2rad(jnt, enc, h);
                 s->joint[jnt].vel = (newPos - s->joint[jnt].pos)/HUBO_LOOP_PERIOD;
                 s->joint[jnt].pos = newPos;
