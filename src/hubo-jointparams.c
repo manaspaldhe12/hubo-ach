@@ -383,11 +383,14 @@ int printHomingParams( FILE* ptr_file, int type, int printAll )
     memset(&state,  0, sizeof(state));
     memset(&cmd,    0, sizeof(cmd));
 
+// Get latest parameters (ie. if parameters have changed since hubo-daemon started.
+// Not really necessary and results in CAN bus issues.
+/*
     wait_on_state(&state_chan, 5);
     cmd.type = D_GET_BOARD_PARAMS_ALL;
     ach_put(&cmd_chan, &cmd, sizeof(cmd));
     wait_on_state(&state_chan, 5);
-
+*/
     size_t fs;
     struct timespec timeout;
     clock_gettime( ACH_DEFAULT_CLOCK, &timeout );
