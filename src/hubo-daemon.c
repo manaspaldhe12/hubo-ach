@@ -1694,18 +1694,19 @@ void fSetEncRef(int jnt, hubo_state_t *s, hubo_ref_t *r, hubo_param_t *h,
          f->data[2] =     int_to_bytes(pos0,3);
          
          short jntFinVal = (short)(jntF1Val/0.01);  // convert from amps to units
-         if(jntFinVal > HUBO_FINGER_SAT_VALUE)
-            jntFinVal = HUBO_FINGER_SAT_VALUE;
-         else if(jntFinVal < -HUBO_FINGER_SAT_VALUE)
-            jntFinVal = -HUBO_FINGER_SAT_VALUE;
+         // Just throwing in some numbers instead of consts, because who cares
+         if(jntFinVal > 15)
+            jntFinVal = 15;
+         else if(jntFinVal < -15)
+            jntFinVal = -15;
 
          f->data[3] = DrcFingerSignConvention((short)(jntFinVal), HUBO_FINGER_CURRENT_CTRL_MODE);
          
          jntFinVal = (short)(jntF2Val/0.01);  // convert from amps to units
-         if(jntFinVal > HUBO_FINGER_SAT_VALUE)
-            jntFinVal = HUBO_FINGER_SAT_VALUE;
-         else if(jntFinVal < -HUBO_FINGER_SAT_VALUE)
-            jntFinVal = -HUBO_FINGER_SAT_VALUE;
+         if(jntFinVal > 20)
+            jntFinVal = 20;
+         else if(jntFinVal < -20)
+            jntFinVal = -20;
 
          f->data[4] = DrcFingerSignConvention((short)(jntFinVal), HUBO_FINGER_CURRENT_CTRL_MODE);
       
