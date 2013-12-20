@@ -32,9 +32,9 @@ if (len(idx) == 0):
     print 'joint not found:', name
 
 idx = idx[0]
-print 'fount joint {0} at index {1}'.format(name, idx)
+print 'found joint {0} at index {1}'.format(name, idx)
 
-drive = data['drive'][idx] 
+drive = data['drive'][idx]
 driven = data['driven'][idx]
 harmonic = data['harm'][idx]
 pEnc = data['enc'][idx]
@@ -58,6 +58,6 @@ else:
 
 
 
-    
+
 
 
