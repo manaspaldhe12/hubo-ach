@@ -324,6 +324,9 @@ typedef struct hubo_virtual {
 typedef struct hubo_ft {
 	double m_x;	///< Moment in X (Mx)
 	double m_y;	///< Moment in Y (My)
+	double m_z;	///< Moment in Y (My)
+	double f_x;	///< Force in Z (Fz)
+	double f_y;	///< Force in Z (Fz)
 	double f_z;	///< Force in Z (Fz)
 }__attribute__((packed)) hubo_ft_t;
 

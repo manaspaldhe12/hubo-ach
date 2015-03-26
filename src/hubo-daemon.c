@@ -188,8 +188,11 @@ void fGetEncValue(int jnt, uint8_t encChoice, hubo_param_t *h, struct can_frame 
 void getEncAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 void getCurrentAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 void hGetFT(int board, struct can_frame *f, int can);
+void hGetFT6Axis(int board, struct can_frame *f, int can);
 void fGetFT(int board, struct can_frame *f);
+void fGetFT6Axis(int board, struct can_frame *f);
 void getFTAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
+void getFTSensor6Axis(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 void fGetAcc(int board, struct can_frame *f);
 void hGetAcc(int board, struct can_frame *f);
 void getAccAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
@@ -317,7 +320,9 @@ void nop_decodeFrame(hubo_state_t* state,
 }
 
 #define NSEC_PER_SEC 1000000000
+#define HEX_VALC 0x8000
 
+int full_scale_const[6];// for FT-sensors 6 axis
 
 void tsadd(const struct timespec* src,
            int64_t delta,
@@ -907,6 +912,9 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
     int successful_imus = 0;
 
     printf("Start Hubo Loop\n");
+
+    hGetFT6Init(H_param->sensor[HUBO_FT_L_HAND].boardNo , &frame, H_param->sensor[HUBO_FT_L_HAND].can);
+    hGetFT6Scale (H_param->sensor[HUBO_FT_L_HAND].boardNo, &frame, H_param->sensor[HUBO_FT_L_HAND].can);
     while(!hubo_sig_quit) {
 
         for (i=0; i<HUBO_IMU_COUNT; ++i) {
@@ -984,6 +992,7 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
 
         /* Get FT Sensor data */
         getFTAllSlow(&H_state, H_param, &frame);
+        getFTSensor6Axis(&H_state, H_param, &frame);
 
         /* Get foot acceleration data */
         getAccAllSlow(&H_state, H_param, &frame);
@@ -1450,6 +1459,32 @@ void hGetFT(int board, struct can_frame *f, int can)
     meta_readCan(hubo_socket[can], f, HUBO_CAN_TIMEOUT_DEFAULT);
 }
 
+void hGetFT6Init(int board, struct can_frame *f, int can)
+{
+    fGetFTInit(board,f);
+    sendCan(hubo_socket[can],f);
+    readCan(hubo_socket[can], f, HUBO_CAN_TIMEOUT_DEFAULT);
+    printf("Initialized 6-axis ft sensors \n");
+}
+
+void hGetFT6Scale (int board, struct can_frame *f, int can)
+{
+    int i=0;
+    for (i=0; i<6; i++){// 6 channels in the new FT sensor
+	    fGetFTScale(board,f,i);
+	    sendCan(hubo_socket[can],f);
+	    readCan(hubo_socket[can], f, HUBO_CAN_TIMEOUT_DEFAULT);
+    }
+}
+
+
+void hGetFT6Axis(int board, struct can_frame *f, int can)
+{
+    fGetFT6Axis(board,f);
+    sendCan(hubo_socket[can],f);
+    readCan(hubo_socket[can], f, HUBO_CAN_TIMEOUT_DEFAULT);
+}
+
 void fGetFT(int board, struct can_frame *f)
 {
     f->can_id    = REQ_SENSOR_TXDF;
@@ -1460,6 +1495,35 @@ void fGetFT(int board, struct can_frame *f)
     f->can_dlc     = 2;
 }
 
+
+void fGetFTInit(int board, struct can_frame *f)
+{
+    f->can_id    = 0x200 | 13;
+    f->data[0]    = 0x07;
+    f->data[1]    = 0x01;
+    f->can_dlc     = 2;
+
+}
+
+
+void fGetFTScale(int board, struct can_frame *f, int nc)
+{
+    f->can_id    = 0x200 | 13;
+    f->data[0]    = 0x18;
+    f->data[1]    = nc;
+    f->can_dlc     = 2;
+}
+
+
+
+void fGetFT6Axis(int board, struct can_frame *f)
+{
+    int cs_addr = (0x200 | 13);
+    f->can_id    = cs_addr;
+    f->data[0]    = 0x07;
+    f->data[1]    = 0x00;
+    f->can_dlc     = 2;
+}
 
 void getFTAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f)
 {
@@ -1478,6 +1542,11 @@ void getFTAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f)
     hGetFT(h->sensor[HUBO_FT_L_HAND].boardNo, f, h->sensor[HUBO_FT_L_HAND].can);
     nop_decodeFrame(s, h, f);
 
+}
+
+void getFTSensor6Axis(hubo_state_t *s, hubo_param_t *h, struct can_frame *f){
+    hGetFT6Axis(h->sensor[HUBO_FT_L_HAND].boardNo, f, h->sensor[HUBO_FT_L_HAND].can);
+    decodeFrame(s, h, f);
 }
 
 void fGetAcc(int board, struct can_frame *f)
@@ -3797,6 +3866,40 @@ void decodeFTFrame(int num, struct hubo_state *s, struct hubo_param *h, struct c
     s->ft[num].f_z = Fz*h->sensor[num].zsign;
 }
 
+void decodeFTFrame6(int num, struct hubo_state *s, struct can_frame *f){
+
+    int sensor = HUBO_FT_L_HAND;
+    if (num==0){//Force measurements?
+	// adc[0][0] = (rx_buffer[i].getData()[1]<<8)|rx_buffer[i].getData()[0];
+	double rawFx= f->data[1]<<8|f->data[0];	
+	double rawFy= f->data[3]<<8|f->data[2];	
+	double rawFz= f->data[5]<<8|f->data[4];	
+	s->ft[sensor].f_x=(rawFx-HEX_VALC)/HEX_VALC*full_scale_const[0];
+	s->ft[sensor].f_y=(rawFy-HEX_VALC)/HEX_VALC*full_scale_const[1];
+	s->ft[sensor].f_z=(rawFz-HEX_VALC)/HEX_VALC*full_scale_const[2];
+	printf("ftsensor z is %f", rawFz);
+    }
+    if (num==1){//Torque measurements?
+	
+	double rawMx= f->data[1]<<8|f->data[0];	
+	double rawMy= f->data[3]<<8|f->data[2];	
+	double rawMz= f->data[5]<<8|f->data[4];	
+    s->ft[sensor].m_x=(rawMx-HEX_VALC)/HEX_VALC*full_scale_const[3];
+	s->ft[sensor].m_y=(rawMy-HEX_VALC)/HEX_VALC*full_scale_const[4];
+	s->ft[sensor].m_z=(rawMz-HEX_VALC)/HEX_VALC*full_scale_const[5];
+
+	printf("ftsensor x is %f", rawMx);
+	printf("ftsensor y is %f", rawMy);
+    }
+}
+
+void decodeFT6Scale(struct hubo_state *s, struct can_frame *f){
+	int nc= f->data[1];
+	if ((nc>=0) && (nc<6)){
+		full_scale_const[nc]=(f->data[2]<<8)|(f->data[3]);
+		printf("got full scale const %f", full_scale_const[nc]);
+	}
+}
 
 void decodeADFrame(int num, struct hubo_state *s, struct can_frame *f){
 
@@ -3836,6 +3939,22 @@ double debugEnc2Rad(int jnt, int enc, hubo_param_t* h, int line) {
 
 int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
     int fs = (int)f->can_id;
+    int can_address=13; 
+   /*6-axis FT Sensor-readings */
+    if (fs == (0x30A | (can_address<<4))){
+      printf("30A \n");
+      decodeFTFrame6(0,s,f);
+    }
+    
+    if  (fs == (0x30B | (can_address<<4))){
+      printf("30B \n");
+      decodeFTFrame6(1,s,f);
+    }
+
+ 
+    if ((fs== (0x200 | can_address <<4)) && (f->data[0] == 0x18)){ // for scaling of ft sensor
+   	    decodeFT6Scale(s,f);
+    }
     
     /* Force-Torque Readings */
     if( (fs >= H_SENSOR_FT_BASE_RXDF) && (fs <= H_SENSOR_FT_MAX_RXDF) )
